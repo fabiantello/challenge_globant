@@ -123,22 +123,6 @@ async def read_users_me(current_user: Annotated[UserID, Depends(get_current_acti
     return current_user
 
 
-def connect():
-    conn = None
-    try:
-        conn = psql.connect(host="localhost", database="globant_challenge", user="user", password="password")
-        cur = conn.cursor()
-        cur.execute('SELECT count(*) FROM public.error_departments')
-        res = cur.fetchone()
-        cur.close()
-    except (Exception, psql.DatabaseError) as error:
-        print(error)
-    finally:
-        if conn is not None:
-            conn.close()
-            print('Database connection closed.')
-    return res
-
 @app.post("/check")
 def foo(file: UploadFile):
     df = pd.read_csv(file.file)
@@ -148,15 +132,32 @@ def foo(file: UploadFile):
 def foo(file: UploadFile, active_user: Annotated[str, Depends(get_current_active_user)]):
     df = pd.read_csv(file.file)
     df.columns = ['id', 'job']
-    df_final = df[~(df.id.isin([np.NaN]))]
+    df2 = df[~(df.id.isin([np.NaN]))]
     df_error = df[(df.id.isin([np.NaN]))]
     try:
-        conn_string = 'postgresql://user:password@0.0.0.0:5432/globant_challenge'
+        conn_string = 'postgresql://user:password@db:5432/globant_challenge'
         db = sql.create_engine(conn_string)
         conn = db.connect()
+        connection = db.raw_connection()
+        cursor = connection.cursor()
+
+        cursor.execute('SELECT distinct id FROM jobs')
+        rows = cursor.fetchall()
+        jobs = []
+        for row in rows:
+            jobs.append(int(row[0]))
+
+        cursor.close()
+
+        df_final = df2[~(df2.id.isin(jobs))]
+        df_dupl = df2[(df2.id.isin(jobs))]
+
         df_final.to_sql('jobs', con=conn, if_exists='append', index=False)
+        df_dupl.to_sql('error_jobs', con=conn, if_exists='append', index=False)
         df_error.to_sql('error_jobs', con=conn, if_exists='append', index=False)
         conn.close()
+
+        return (f"Se insertaron {len(df_final)} registros en la tabla jobs. Registros con PK duplicada: {len(df_dupl)}. Registros con error: {len(df_error)}")
     except:
         print('Connection failed')
 
@@ -164,15 +165,32 @@ def foo(file: UploadFile, active_user: Annotated[str, Depends(get_current_active
 def foo(file: UploadFile, active_user: Annotated[str, Depends(get_current_active_user)]):
     df = pd.read_csv(file.file)
     df.columns = ['id', 'department']
-    df_final = df[~(df.id.isin([np.NaN]))]
+    df2 = df[~(df.id.isin([np.NaN]))]
     df_error = df[(df.id.isin([np.NaN]))]
     try:
-        conn_string = 'postgresql://user:password@0.0.0.0:5432/globant_challenge'
+        conn_string = 'postgresql://user:password@db:5432/globant_challenge'
         db = sql.create_engine(conn_string)
         conn = db.connect()
+        connection = db.raw_connection()
+        cursor = connection.cursor()
+
+        cursor.execute('SELECT distinct id FROM departments')
+        rows = cursor.fetchall()
+        depart = []
+        for row in rows:
+            depart.append(int(row[0]))
+
+        cursor.close()
+
+        df_final = df2[~(df2.id.isin(depart))]
+        df_dupl = df2[(df2.id.isin(depart))]
+
         df_final.to_sql('departments', con=conn, if_exists='append', index=False)
+        df_dupl.to_sql('error_departments', con=conn, if_exists='append', index=False)
         df_error.to_sql('error_departments', con=conn, if_exists='append', index=False)
         conn.close()
+
+        return (f"Se insertaron {len(df_final)} registros en la tabla departments. Registros con PK duplicada: {len(df_dupl)}. Registros con error: {len(df_error)}")
     except:
         print('Connection failed')
 
@@ -182,10 +200,8 @@ def foo(file: UploadFile, active_user: Annotated[str, Depends(get_current_active
     df = pd.read_csv(file.file)
     df.columns = ['id', 'name', 'datetime', 'department_id', 'job_id']
 
-    df_final = df[~(df.id.isin([np.NaN]))]
-    df_error = df[(df.id.isin([np.NaN]))]
     try:
-        conn_string = 'postgresql://user:password@0.0.0.0:5432/globant_challenge'
+        conn_string = 'postgresql://user:password@db:5432/globant_challenge'
         db = sql.create_engine(conn_string)
         conn = db.connect()
         connection = db.raw_connection()
@@ -203,13 +219,24 @@ def foo(file: UploadFile, active_user: Annotated[str, Depends(get_current_active
         for row in rows:
             depart.append(int(row[0]))
 
+        cursor.execute('SELECT distinct id FROM hired_employees')
+        rows = cursor.fetchall()
+        hired = []
+        for row in rows:
+            hired.append(int(row[0]))
+
         cursor.close()
 
-        df_final = df[(df.job_id.isin(jobs)) | (df.department_id.isin(depart)) | ~(df.datetime.isin([np.NaN]))]
+        df_final = df[~(df.id.isin(hired)) & ~(df.id.isin([np.NaN])) & (df.job_id.isin(jobs)) & (df.department_id.isin(depart)) & ~(df.datetime.isin([np.NaN]))]
+        df_dupl = df[(df.id.isin(hired))]
+        df_error = df[(df.id.isin([np.NaN])) | (df.job_id.isin([np.NaN])) | (df.department_id.isin([np.NaN])) | (df.datetime.isin([np.NaN])) ]
+        
         df_final.to_sql('hired_employees', con=conn, if_exists='append', index=False)
-
-    #    df_error.to_sql('error_hired_employees', con=conn, if_exists='append', index=False)
+        df_dupl.to_sql('error_hired_employees', con=conn, if_exists='append', index=False)
+        df_error.to_sql('error_hired_employees', con=conn, if_exists='append', index=False)
         conn.close()
+
+        return (f"Se insertaron {len(df_final)} registros en la tabla departments. Registros con PK duplicada: {len(df_dupl)}. Registros con error: {len(df_error)}")
     except:
         print('Connection failed')
 
