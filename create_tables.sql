@@ -97,7 +97,8 @@ COPY temp_hired_employees FROM '/path/to/csv/hired_employees.csv' WITH (FORMAT c
 INSERT INTO hired_employees --(id,"name","datetime",department_id, job_id)
 SELECT id,"name","datetime",department_id, job_id
 FROM temp_hired_employees
-WHERE coalesce(department_id,-1) IN (select distinct id from departments)
+WHERE id IS NOT NULL
+  AND coalesce(department_id,-1) IN (select distinct id from departments)
   AND coalesce(job_id,-1) IN (select distinct id from jobs)
   AND "datetime" IS NOT NULL
 ;
