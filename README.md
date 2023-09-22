@@ -10,3 +10,6 @@ Once the container are running, for entering the rest_api, open your browser and
 There, in the Authorize button at the up-right side, enter the credentials, which in this case is "globant", without quotes, both for user and password.
 
 After this steps, you're now able to use the three endpoints for load new data from csv files into the postgresql database.
+
+
+In the sql file "challenge_2" there are the queries which answer those questions.
